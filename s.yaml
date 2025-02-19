@@ -1,0 +1,100 @@
+edition: 3.0.0
+name: animation-creation
+access: 'undefined'
+vars:
+  region: "cn-shanghai"
+  prefix: 'animation-creation-zg0v'
+  imageVersion: 'v5'
+  imageUrl: 'registry.${vars.region}.aliyuncs.com/ohyee/fc-demo:fc-comfyui-book-${vars.imageVersion}'
+resources:
+  comfyui:
+    component: fc3
+    actions:
+    props:
+      region: ${vars.region}
+      functionName: '${vars.prefix}-comfyui'
+      description: 'ComfyUI 函数'
+      # 实例规格
+      timeout: 36000
+      diskSize: 512
+      cpu: 8
+      memorySize: 32768
+      instanceConcurrency: 200
+      gpuConfig:
+        gpuMemorySize: 16384
+        gpuType: fc.gpu.tesla.1
+      runtime: custom-container
+      customContainerConfig:
+        port: 9000
+        image: ${vars.imageUrl}
+      environmentVariables:
+        USE_AGENT: '1'
+        EXTRA_ARGS: --disable-cuda-malloc
+      triggers:
+        - triggerConfig:
+            methods:
+              - GET
+              - POST
+            authType: anonymous
+            disableURLInternet: false
+          triggerName: defaultTrigger
+          description: ''
+          qualifier: LATEST
+          triggerType: http
+      concurrencyConfig:
+        reservedConcurrency: 1
+  web:
+    component: fc3
+    props:
+      timeout: 3600
+      role: acs:ram::1170839429731261:role/aliyunfcdefaultrole
+      internetAccess: true
+      cpu: 8
+      memorySize: 8192
+      diskSize: 512
+      instanceConcurrency: 200
+      region: ${vars.region}
+      description: AI 剧本生成与动画创作
+      runtime: custom.debian10
+      layers:
+        - acs:fc:${vars.region}:official:layers/Python310-Opencv4x/versions/2
+        - acs:fc:${vars.region}:official:layers/FFmpeg6x/versions/1
+      customRuntimeConfig:
+        command:
+          - python3
+          - app.py
+        port: 9000
+      environmentVariables:
+        OSS_BUCKET: storytelling111
+        OSS_ENDPOINT: https://oss-cn-shanghai.aliyuncs.com
+        OPENBLAS_NUM_THREADS: '1'
+        USER_NAME: ''
+        USER_PASSWORD: ''
+        ENABLE_LOGIN: 'false'
+        DASHSCOPE_API_KEY: sk-634413a93bff45e7bf67f2940f9d1fd9
+        LD_LIBRARY_PATH: /code:/code/lib:/usr/local/lib:/opt/lib
+        PATH: /opt/python3.10/bin:/var/fc/lang/python3.10/bin:/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/ruby/bin:/opt/bin:/code:/code/bin
+        PYTHONPATH: /opt/python:/code/python:/code
+        TZ: Asia/Shanghai
+        COMFYUI_BASE_URL: '${resources.comfyui.output.url.system_intranet_url}'
+      functionName: '${vars.prefix}-web'
+      code: ./code
+      concurrencyConfig:
+        reservedConcurrency: 1
+  custom-domain:
+    component: fc3-domain
+    props:
+      region: ${vars.region}
+      domainName: auto
+      protocol: HTTP
+      routeConfig:
+        routes:
+          - path: /*
+            functionName: ${resources.web.props.functionName}
+            methods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            qualifier: LATEST
